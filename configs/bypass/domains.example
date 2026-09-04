@@ -1,0 +1,3 @@
+# Example domains (one per line). Copy to /etc/ubrouter/bypass/domains/
+# example.com
+# cdn.example.net

@@ -1,0 +1,14 @@
+.cursor/
+.cursorignore
+AGENTS.md
+CURSOR.md
+*.swp
+*~
+.DS_Store
+answers.local.yaml
+answers.local.json
+/state/
+/work/
+*.tgz
+*.tar.gz
+deploy/secrets.env

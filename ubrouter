@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+# ubrouter — thin CLI after install / from repo
+set -euo pipefail
+_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${UBROUTER_ROOT:-}" && -f "${UBROUTER_ROOT}/VERSION" ]]; then
+  ROOT="$UBROUTER_ROOT"
+elif [[ -f "$_HERE/VERSION" ]]; then
+  ROOT="$_HERE"
+elif [[ -f /usr/local/lib/ubrouter/VERSION ]]; then
+  ROOT=/usr/local/lib/ubrouter
+elif [[ -f "$_HERE/../VERSION" ]]; then
+  ROOT="$(cd "$_HERE/.." && pwd)"
+else
+  echo "ERROR: не найден UBrouter ROOT (VERSION). Запускайте из клона или после apply (install-cli)." >&2
+  exit 1
+fi
+export UBROUTER_ROOT="$ROOT"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/lib/common.sh"
+
+cmd="${1:-}"
+case "$cmd" in
+  status)
+    echo "UBrouter $UBROUTER_VERSION"
+    [[ -f /etc/ubrouter/state.json ]] && cat /etc/ubrouter/state.json || echo "state: (нет)"
+    echo "---"
+    ip -br link || true
+    echo "---"
+    ip -4 -br addr || true
+    echo "---"
+    sysctl -n net.ipv4.ip_forward 2>/dev/null | awk '{print "ip_forward="$1}'
+    systemctl is-active nftables 2>/dev/null | awk '{print "nftables="$1}' || true
+    systemctl is-active dnsmasq 2>/dev/null | awk '{print "dnsmasq="$1}' || true
+    systemctl is-active chrony 2>/dev/null | awk '{print "chrony="$1}' || systemctl is-active chronyd 2>/dev/null | awk '{print "chrony="$1}' || true
+    if command -v swanctl >/dev/null 2>&1; then
+      systemctl is-active strongswan-starter 2>/dev/null | awk '{print "strongswan="$1}' \
+        || systemctl is-active strongswan 2>/dev/null | awk '{print "strongswan="$1}' || true
+    fi
+    if nft list table inet ubrouter_bypass >/dev/null 2>&1; then
+      echo "bypass: nft table ubrouter_bypass present"
+      ip rule show | grep -E 'fwmark|lookup' || true
+    fi
+    ;;
+  rollback)
+    need_root
+    bash "$ROOT/scripts/lib/snapshot.sh" restore "${2:-}"
+    ;;
+  apply)
+    need_root
+    export UBROUTER_ANSWERS="${2:-/etc/ubrouter/answers.yaml}"
+    bash "$ROOT/scripts/lib/apply.sh" apply
+    ;;
+  bypass)
+    need_root
+    export UBROUTER_ANSWERS="${2:-/etc/ubrouter/answers.yaml}"
+    export UBROUTER_ONLY_MODULES=bypass-policy
+    info "apply only bypass-policy"
+    bash "$ROOT/scripts/lib/apply.sh" apply
+    ;;
+  bypass-reload)
+    need_root
+    bash /usr/local/lib/ubrouter/bypass-reload.sh 2>/dev/null \
+      || bash "$ROOT/scripts/lib/bypass-reload.sh"
+    ;;
+  ikev2-client|ikev2-p12|vpn-client-p12)
+    need_root
+    shift
+    bash "$ROOT/scripts/modules/vpn/ikev2/issue-client.sh" "$@"
+    ;;
+  openvpn-client|ovpn-client)
+    need_root
+    shift
+    bash "$ROOT/scripts/modules/vpn/openvpn/issue-client.sh" "$@"
+    ;;
+  wg-peer|wireguard-peer)
+    need_root
+    shift
+    bash "$ROOT/scripts/modules/vpn/wireguard/issue-peer.sh" "$@"
+    ;;
+  install-cli)
+    need_root
+    bash "$ROOT/scripts/lib/install-cli.sh"
+    ;;
+  doctor)
+    export UBROUTER_ANSWERS="${2:-/etc/ubrouter/answers.yaml}"
+    bash "$ROOT/scripts/lib/doctor.sh"
+    ;;
+  export)
+    need_root
+    shift
+    bash "$ROOT/scripts/lib/backup.sh" export "$@"
+    ;;
+  import)
+    need_root
+    shift
+    bash "$ROOT/scripts/lib/backup.sh" import "$@"
+    ;;
+  plan)
+    export UBROUTER_ANSWERS="${2:-/etc/ubrouter/answers.yaml}"
+    bash "$ROOT/scripts/lib/apply.sh" plan
+    ;;
+  version|--version)
+    echo "$UBROUTER_VERSION"
+    ;;
+  *)
+    cat <<EOF
+UBrouter $UBROUTER_VERSION
+
+Usage:
+  sudo $0 status
+  sudo $0 apply [/etc/ubrouter/answers.yaml]
+  sudo $0 bypass [/etc/ubrouter/answers.yaml]
+  sudo $0 bypass-reload
+  sudo $0 doctor                            # diagnostics across all modules
+  sudo $0 export [--out FILE] [--no-pki]    # backup tarball (secrets!)
+  sudo $0 import FILE [--yes]               # restore from tarball
+  sudo $0 ikev2-client [--name NAME ...]
+  sudo $0 openvpn-client --name NAME --server HOST
+  sudo $0 wg-peer --server wg-server --name phone [--qr]
+  sudo $0 install-cli                       # /usr/local/lib/ubrouter + sbin wrapper
+  sudo $0 plan  [/etc/ubrouter/answers.yaml]
+  sudo $0 rollback [snapshot-id]
+EOF
+    exit 1
+    ;;
+esac

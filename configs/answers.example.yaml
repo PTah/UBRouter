@@ -1,0 +1,184 @@
+# UBrouter answers schema (logical v1)
+# Полный JSON Schema — рядом answers.schema.json (упрощённый draft).
+# Секреты выносить в answers.local.yaml (gitignore).
+
+version: 1
+
+host:
+  timezone: Europe/Moscow
+  hostname: ubrouter
+
+interfaces:
+  naming: eth          # keep | eth | ether | custom
+  order: pci           # pci | mac | manual
+  map:
+    - mac: "00:11:22:33:44:50"
+      name: eth0
+      role: wan
+    - mac: "00:11:22:33:44:51"
+      name: eth1
+      role: lan
+  bridge:
+    enabled: false
+    name: br-lan
+    members: []
+
+wan:
+  interface: eth0
+  mode: dhcp           # dhcp | static | pppoe | ipoe | none
+  vlan_id: null
+  mtu: null
+  ipv6: off
+  static: null
+  # static:
+  #   address: 203.0.113.10/24
+  #   gateway: 203.0.113.1
+  #   dns: ["9.9.9.9", "1.1.1.1"]
+  pppoe: null
+  # pppoe:
+  #   username: "user@isp"
+  #   password: null   # лучше в answers.local.yaml
+  #   mtu: 1492
+  # multi_mode: failover   # failover | lb (ECMP on live WANs)
+  multi: []
+  # multi:
+  #   - { interface: eth2, mode: dhcp, metric: 200 }
+  #   - { interface: eth3, mode: static, metric: 300, static: { address: "203.0.113.2/24", gateway: "203.0.113.1" } }
+
+lan:
+  interface: eth1
+  cidr: 10.0.0.1/24
+  domain: lan
+  dns_for_clients: router   # router | upstream | list
+  ntp_for_clients: router   # router | upstream | off
+  ipv6:
+    enabled: false
+    address: null          # e.g. fd00::1/64 → radvd advertises fd00::/64
+    ra: true               # radvd when enabled+address
+  dhcp:
+    enabled: true
+    pool_start: 10.0.0.1
+    pool_end: 10.0.0.1
+    lease: 12h
+    # tags: разные option 6/42 по тегу
+    # tags:
+    #   - { name: Children, dns: ["9.9.9.9"], ntp: ["router"] }
+    #   - { name: IPTV, dns: ["router"], ntp: ["router"] }
+    # hosts: MAC → IP / тег
+    # hosts:
+    #   - { mac: "aa:bb:cc:dd:ee:01", ip: "10.0.0.1", hostname: phone, tag: Children }
+    tags: []
+    hosts: []
+
+services:
+  nat: true
+  firewall: true
+  dnsmasq: true
+  chrony: true
+  fail2ban: false
+  sip_alg: false
+  sqm: false
+  igmpproxy: false
+  unattended_upgrades: true
+
+igmpproxy:
+  enabled: false
+  upstream: null       # WAN / ISP side, e.g. eth0
+  downstream: null     # LAN / bridge, e.g. eth1 or br-lan
+  quickleave: true
+  altnet: null         # optional CIDR on upstream for some ISPs
+
+dns:
+  upstream:
+    - "9.9.9.9"
+    - "1.1.1.1"
+
+firewall:
+  wan_ssh: deny          # deny | allowlist | knock
+  allowlist_ssh: []
+  icmp_wan: rate         # allow | rate | deny
+  port_forwards: []
+  # - { proto: tcp, wan_port: 8080, lan_ip: 10.0.0.1, lan_port: 80 }
+  knock:
+    enabled: false
+    icmp_lengths: [460, 549, 626]
+    tcp_ports: [54231, 44398, 33458]
+    allow_timeout: 4h30m
+    unlock: [ssh]        # ssh | rdp | ike
+
+vpn:
+  clients: []
+  # - { type: wireguard, name: wg0, config_file: /etc/ubrouter/import/wg0.conf, routes: [], default: false }
+  # - { type: gre, name: gre0, local: auto, remote: 198.51.100.2, key: null, mtu: 1436, routes: ["10.0.0.0/8"], ipsec: false }
+  # - { type: gre, name: gre1, remote: 198.51.100.9, mtu: 1400, ipsec: true }  # PSK → answers.local vpn.tunnel_psks.gre1
+  # - { type: ipip, name: ipip0, local: auto, remote: 198.51.100.3, address: "10.9.0.1/30", routes: [], ipsec: false }
+  # - { type: openvpn, name: ovpn-client, config_file: /etc/ubrouter/import/client.ovpn }
+  # - { type: l2tp, name: l2tp0, server: vpn.example.com, user: u, ipsec: true }
+  #     # password: answers.local → vpn.l2tp_passwords.l2tp0 ; IPsec: vpn.l2tp_psks.l2tp0
+  # - { type: eoip, name: eoip0, remote: 198.51.100.4, tunnel_id: 10, address: "10.5.5.1/30", ipsec: true }
+  # - type: ikev2
+  #   name: to-office
+  #   remote: vpn.example.com
+  #   auth: eap-mschapv2   # eap-mschapv2 | psk | pubkey
+  #   eap_id: user@example
+  #   remote_ts: 10.0.0.0/8
+  #   auto_start: true
+  #   # пароль: answers.local.yaml → vpn.ikev2_passwords.to-office
+  servers: []
+  # - { type: wireguard, name: wg-server, listen: 51820, address: 10.66.0.1/24, peers: [] }
+  # - { type: openvpn, name: ovpn-server, listen: 1194, proto: udp, network: "10.8.0.0/24",
+  #     public_host: auto, clients: [phone] }   # → /root/ubrouter-vpn-clients/*.ovpn
+  # - type: ikev2
+  #   name: ikev2-server
+  #   id: auto                 # или FQDN / публичный IP (SAN)
+  #   server_cn: ubrouter-vpn
+  #   pool: 10.67.0.10-10.67.0.200
+  #   pool_cidr: 10.67.0.0/24  # для nft forward/NAT
+  #   dns: ["10.0.0.1"]
+  #   local_ts: 0.0.0.0/0      # или только LAN CIDR
+  #   clients: [phone, tablet] # → /root/ubrouter-vpn-clients/*.p12
+
+# Обход блокировок (0.4.0): свои списки, без встроенных pack
+bypass:
+  enabled: false
+  domain_files:
+    - /etc/ubrouter/bypass/domains
+  cidr_files:
+    - /etc/ubrouter/bypass/cidrs
+  target: null           # gre0 / wg0 / …
+  table: 200
+  fwmark: "0x2"
+  fail_open: true
+  mark_lan_only: true
+
+qos:
+  cake_lan: false
+  cake_tunnels: false
+  bandwidth: null
+
+# Netwatch + VPN notify + optional Telegram (секреты в answers.local.yaml)
+monitoring:
+  netwatch:
+    enabled: false
+    interval_sec: 10
+    telegram: false
+    host_label: ubrouter
+    hosts: []
+  vpn_notify:
+    enabled: false
+    telegram: true
+    events: [ikev2, gre, eoip, wireguard, openvpn]
+# answers.local.yaml:
+# monitoring:
+#   telegram:
+#     bot_token: "..."
+#     chat_id: "..."
+# Telegram API часто требует bypass/VPN с роутера до api.telegram.org.
+
+routing:
+  ospf:
+    enabled: false
+    router_id: null
+    redistribute_connected: true
+    networks: []
+    passive_interfaces: []

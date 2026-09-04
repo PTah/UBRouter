@@ -1,0 +1,3 @@
+# optional/sip-alg
+
+Stub.

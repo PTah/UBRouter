@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PTah/UBrouter/configs/answers.schema.json",
+  "title": "UBrouter answers",
+  "type": "object",
+  "required": ["version", "interfaces", "wan", "lan", "services"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "host": {
+      "type": "object",
+      "properties": {
+        "timezone": { "type": "string" },
+        "hostname": { "type": "string" }
+      }
+    },
+    "interfaces": {
+      "type": "object",
+      "required": ["naming", "map"],
+      "properties": {
+        "naming": { "enum": ["keep", "eth", "ether", "custom"] },
+        "order": { "enum": ["pci", "mac", "manual"] },
+        "map": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["mac", "name"],
+            "properties": {
+              "mac": { "type": "string" },
+              "name": { "type": "string" },
+              "role": { "enum": ["wan", "lan", "bridge-member", "mgmt", "opt", "unused"] }
+            }
+          }
+        },
+        "bridge": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "name": { "type": "string" },
+            "members": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "wan": {
+      "type": "object",
+      "required": ["interface", "mode"],
+      "properties": {
+        "interface": { "type": "string" },
+        "mode": { "enum": ["dhcp", "static", "pppoe", "ipoe", "none"] },
+        "vlan_id": { "type": ["integer", "null"] },
+        "mtu": { "type": ["integer", "null"] },
+        "ipv6": { "enum": ["off", "dhcpv6", "slaac"] },
+        "pppoe": { "type": ["object", "null"] },
+        "multi_mode": { "enum": ["failover", "lb", "loadbalance", "ecmp"] },
+        "multi": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "Secondary WANs: failover or LB"
+        }
+      }
+    },
+    "lan": {
+      "type": "object",
+      "required": ["interface", "cidr"],
+      "properties": {
+        "interface": { "type": "string" },
+        "cidr": { "type": "string" },
+        "domain": { "type": "string" },
+        "dns_for_clients": { "enum": ["router", "upstream", "list"] },
+        "ntp_for_clients": { "enum": ["router", "upstream", "off"] },
+        "ipv6": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "address": { "type": ["string", "null"] },
+            "ra": { "type": "boolean", "description": "radvd on LAN" }
+          }
+        },
+        "dhcp": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "pool_start": { "type": "string" },
+            "pool_end": { "type": "string" },
+            "lease": { "type": "string" },
+            "tags": { "type": "array" },
+            "hosts": { "type": "array" }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "properties": {
+        "nat": { "type": "boolean" },
+        "firewall": { "type": "boolean" },
+        "dnsmasq": { "type": "boolean" },
+        "chrony": { "type": "boolean" },
+        "fail2ban": { "type": "boolean" },
+        "sip_alg": { "type": "boolean" },
+        "sqm": { "type": "boolean" },
+        "igmpproxy": { "type": "boolean" },
+        "unattended_upgrades": { "type": "boolean" }
+      }
+    },
+    "igmpproxy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "upstream": { "type": ["string", "null"] },
+        "downstream": { "type": ["string", "null"] },
+        "quickleave": { "type": "boolean" },
+        "altnet": { "type": ["string", "null"] }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "properties": {
+        "upstream": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "firewall": {
+      "type": "object",
+      "properties": {
+        "wan_ssh": { "enum": ["deny", "allow", "allowlist", "knock"] },
+        "allowlist_ssh": { "type": "array", "items": { "type": "string" } },
+        "icmp_wan": { "enum": ["allow", "rate", "deny"] },
+        "port_forwards": { "type": "array" },
+        "knock": { "type": "object" }
+      }
+    },
+    "vpn": {
+      "type": "object",
+      "properties": {
+        "clients": {
+          "type": "array",
+          "description": "wireguard|openvpn|gre|ipip|l2tp|ikev2|eoip; gre/eoip/ipip: ipsec bool"
+        },
+        "servers": {
+          "type": "array",
+          "description": "wireguard|openvpn|ikev2"
+        }
+      }
+    },
+    "bypass": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "domain_files": { "type": "array", "items": { "type": "string" } },
+        "cidr_files": { "type": "array", "items": { "type": "string" } },
+        "target": { "type": ["string", "null"] },
+        "fail_open": { "type": "boolean" },
+        "fwmark": { "type": ["string", "integer"] },
+        "table": { "type": ["integer", "string"] },
+        "mark_lan_only": { "type": "boolean" }
+      }
+    },
+    "qos": {
+      "type": "object",
+      "properties": {
+        "cake_lan": { "type": "boolean" },
+        "cake_tunnels": { "type": "boolean" },
+        "bandwidth": { "type": ["string", "null"] }
+      }
+    },
+    "monitoring": {
+      "type": "object",
+      "properties": {
+        "netwatch": { "type": "object" },
+        "vpn_notify": { "type": "object" },
+        "telegram": { "type": "object" }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "properties": {
+        "ospf": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "router_id": { "type": ["string", "null"] },
+            "redistribute_connected": { "type": "boolean" },
+            "networks": { "type": "array" },
+            "passive_interfaces": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}
